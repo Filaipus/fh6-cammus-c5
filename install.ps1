@@ -8,15 +8,18 @@
 
     On the first run every game file that gets changed is copied to the backup folder, but
     only if the game's copy is still the original. Every later run rebuilds from that copy,
-    so the script can be run again at any time (e.g. after Steam restored the files).
+    so the script can be run again at any time (e.g. after Steam or the Xbox app restored
+    the files).
     uninstall.ps1 restores the backups and removes the DLL.
 
     Why each part is needed: README.md and docs/how-it-works.md.
 
 .PARAMETER GameDir
-    FH6 folder. Default: $env:FH6_DIR, else found through Steam (see fh6-path.ps1).
+    FH6 folder. Default: $env:FH6_DIR, else found through Steam or the Game Pass package
+    (see fh6-path.ps1).
 .PARAMETER BackupDir
-    Folder for the untouched copies. Default: $env:FH6_BACKUP_DIR, else %USERPROFILE%\fh6-backup.
+    Folder for the untouched copies. Default: $env:FH6_BACKUP_DIR, else %USERPROFILE%\fh6-backup
+    (Game Pass: %USERPROFILE%\fh6-backup\gamepass-<game version>).
 .PARAMETER Label
     Name FH6 shows for the profile, at most 12 bytes (UTF-8). Default: CammusC5CP5.
 .PARAMETER Languages
@@ -28,7 +31,7 @@
 [CmdletBinding()]
 param(
     [string]$GameDir,
-    [string]$BackupDir = $(if ($env:FH6_BACKUP_DIR) { $env:FH6_BACKUP_DIR } else { "$env:USERPROFILE\fh6-backup" }),
+    [string]$BackupDir,
     [string]$Label = 'CammusC5CP5',
     [string[]]$Languages = @('EN', 'DE'),
     [string]$DllPath,
@@ -42,6 +45,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 . "$PSScriptRoot\fh6-path.ps1"
 if (-not $GameDir) { $GameDir = Find-Fh6Dir }
+if (-not $BackupDir) { $BackupDir = Get-Fh6BackupDir $GameDir }
 
 # --- constants -------------------------------------------------------------------------------
 $SlotEntry = 'DefaultRawGameControllerMappingProfileLogitechG29.xml'
@@ -99,7 +103,7 @@ function Write-ZipCopy([string]$Source, [string]$Destination, [string]$ReplaceNa
 function Confirm-Backup([string]$GameFile, [string]$BackupFile, [scriptblock]$IsOriginal) {
     if (Test-Path -LiteralPath $BackupFile) { return }
     if (-not (& $IsOriginal $GameFile)) {
-        throw "$GameFile is not the original file. Restore the game files first (Steam: Properties > Installed Files > Verify integrity of game files), then run again."
+        throw "$GameFile is not the original file. Restore the game files first (Steam: Properties > Installed Files > Verify integrity of game files; Xbox app: Manage > Files > Verify and repair), then run again."
     }
     New-Item -ItemType Directory -Force -Path (Split-Path $BackupFile) | Out-Null
     Copy-Item -LiteralPath $GameFile -Destination $BackupFile
@@ -118,8 +122,10 @@ Write-Host "Backup folder: $BackupDir"
 if (-not $SkipDll) {
     Write-Host '[1/3] FFB proxy DLL'
     if (-not $DllPath -or -not (Test-Path -LiteralPath $DllPath)) { throw 'xinput1_3.dll not found. Build it (dll\) or pass -DllPath.' }
-    Copy-Item -LiteralPath $DllPath -Destination "$GameDir\xinput1_3.dll" -Force
-    Write-Host "  copied $DllPath"
+    # The Game Pass build imports xinput1_4.dll instead; the proxy serves under either name.
+    $dllName = if (Get-Fh6PackageVersion $GameDir) { 'xinput1_4.dll' } else { 'xinput1_3.dll' }
+    Copy-Item -LiteralPath $DllPath -Destination "$GameDir\$dllName" -Force
+    Write-Host "  copied $DllPath as $dllName"
 }
 
 # --- 2. profile in the G29 slot --------------------------------------------------------------
@@ -164,6 +170,8 @@ if (-not $SkipLabel) {
         $gameTable = "$GameDir\media\Stripped\StringTables\$lang.zip"
         $backupTable = "$BackupDir\StringTables\$lang.zip"
         if (-not (Test-Path -LiteralPath $gameTable)) { Write-Warning "no string table $lang; skipped"; continue }
+        # Game Pass keeps 0-byte placeholders for language packs that are not downloaded.
+        if ((Get-Item -LiteralPath $gameTable).Length -eq 0) { Write-Warning "string table $lang not installed (empty file); skipped"; continue }
         Confirm-Backup $gameTable $backupTable {
             param($f) $Latin1.GetString((Read-ZipEntry $f $StringEntry)).Contains($OldLabel)
         }
@@ -180,6 +188,12 @@ Write-Host ''
 Write-Host 'Done. In FH6: Settings > Advanced Controls > Invert Force Feedback = On;'
 Write-Host "Controls > Wheel > Layout = $Label; for telemetry: Settings > HUD and Gameplay > Data Out = On, 127.0.0.1, port 20779."
 Write-Host ''
-Write-Host 'Run this script again after every FH6 update and after Steam "Verify integrity of game files":'
-Write-Host 'both restore the game files and remove the profile and the label (the DLL stays).'
-Write-Host "After an FH6 update, first delete the old copies in $BackupDir (they belong to the previous version)."
+if (Get-Fh6PackageVersion $GameDir) {
+    Write-Host 'Run this script again after every FH6 update (the Xbox app installs them in the background)'
+    Write-Host 'and after "Verify and repair": both restore the game files and remove the profile and the'
+    Write-Host 'label (the DLL stays). Backups are kept per game version; nothing needs deleting first.'
+} else {
+    Write-Host 'Run this script again after every FH6 update and after Steam "Verify integrity of game files":'
+    Write-Host 'both restore the game files and remove the profile and the label (the DLL stays).'
+    Write-Host "After an FH6 update, first delete the old copies in $BackupDir (they belong to the previous version)."
+}
