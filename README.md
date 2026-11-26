@@ -41,7 +41,7 @@ Another Cammus base has another PID; the profile is written for these IDs.
 |---|---|---|---|
 | 1 | `xinput1_3.dll` proxy (Game Pass: as `xinput1_4.dll`) | FH6 game folder | FFB at all: stops the crash in Windows' `pid.dll`, switches the motor on |
 | 2 | Mapping profile in the **Logitech G29 slot** | `media\inputmappingprofiles.zip` | FH6 using the base for FFB although the pedals are "Device 1"; the button layout |
-| 3 | Profile label "CammusC5CP5" | `media\Stripped\StringTables\EN.zip`, `DE.zip` | cosmetic: the name shown instead of "Logitech G29" |
+| 3 | Profile label "CammusC5CP5" | `media\Stripped\StringTables\*.zip` (every installed language) | cosmetic: the name shown instead of "Logitech G29" |
 
 Then two things are set by hand: the in-game settings and the Cammus app (below).
 
@@ -63,7 +63,7 @@ Then two things are set by hand: the in-game settings and the Cammus app (below)
    `gamepass-<version>`; `-BackupDir` or `FH6_BACKUP_DIR` to change); the script only
    backs up files that are still original and refuses otherwise.
    Other options: `-Label` (at most 12 bytes), `-Languages` (string tables for the label,
-   default `EN, DE`), `-SkipDll`, `-SkipProfile`, `-SkipLabel`. `install.cmd` runs
+   e.g. `EN, DE`; default every installed language), `-SkipDll`, `-SkipProfile`, `-SkipLabel`. `install.cmd` runs
    `install.ps1`, which needs only Windows PowerShell 5.1.
 4. Make the in-game settings and the Cammus settings below.
 
@@ -172,8 +172,7 @@ Differences from Steam:
 - Updates install in the background; run `install.cmd` after each one (see
   [After an update](#after-an-fh6-update-or-verify-integrity-of-game-files)).
 - Only downloaded language packs have string tables; the others are empty placeholder
-  files, which the label step skips with a warning. For a language other than English, pass
-  it, e.g. `install.cmd -Languages EN, PT`.
+  files, which the label step leaves alone.
 - If both versions are installed, Steam's is found first; pass `-GameDir` for the other.
 
 ## Development

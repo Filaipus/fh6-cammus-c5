@@ -23,7 +23,8 @@
 .PARAMETER Label
     Name FH6 shows for the profile, at most 12 bytes (UTF-8). Default: CammusC5CP5.
 .PARAMETER Languages
-    String tables to patch for the label (FH6's language codes). Default: EN, DE.
+    String tables to patch for the label (FH6's language codes, e.g. EN, DE). Default: every
+    installed one; a table that cannot be patched is then skipped with a warning.
 
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
@@ -33,7 +34,7 @@ param(
     [string]$GameDir,
     [string]$BackupDir,
     [string]$Label = 'CammusC5CP5',
-    [string[]]$Languages = @('EN', 'DE'),
+    [string[]]$Languages,
     [string]$DllPath,
     [string]$ProfilePath,
     [switch]$SkipDll,
@@ -176,21 +177,33 @@ if (-not $SkipLabel) {
     if ($new.Length -lt 1 -or $new.Length -gt 12) { throw "Label must be 1-12 UTF-8 bytes; '$Label' has $($new.Length)." }
     $replacement = "`0" + $Latin1.GetString($new) + ("`0" * (13 - $new.Length))   # same length as "`0Logitech G29`0"
 
+    # Default: every installed language. Game Pass keeps 0-byte placeholders for language
+    # packs that are not downloaded. A table named with -Languages must patch; one found
+    # here is skipped with a warning if it does not.
+    $strict = [bool]$Languages
+    if (-not $strict) {
+        $Languages = Get-ChildItem -LiteralPath "$GameDir\media\Stripped\StringTables" -Filter *.zip |
+            Where-Object { $_.Length -gt 0 } | ForEach-Object { $_.BaseName }
+    }
     foreach ($lang in $Languages) {
         $gameTable = "$GameDir\media\Stripped\StringTables\$lang.zip"
         $backupTable = "$BackupDir\StringTables\$lang.zip"
         if (-not (Test-Path -LiteralPath $gameTable)) { Write-Warning "no string table $lang; skipped"; continue }
-        # Game Pass keeps 0-byte placeholders for language packs that are not downloaded.
         if ((Get-Item -LiteralPath $gameTable).Length -eq 0) { Write-Warning "string table $lang not installed (empty file); skipped"; continue }
-        Confirm-Backup $gameTable $backupTable {
-            param($f) $Latin1.GetString((Read-ZipEntry $f $StringEntry)).Contains($OldLabel)
+        try {
+            Confirm-Backup $gameTable $backupTable {
+                param($f) $Latin1.GetString((Read-ZipEntry $f $StringEntry)).Contains($OldLabel)
+            }
+            $text = $Latin1.GetString((Read-ZipEntry $backupTable $StringEntry))
+            $hits = ([regex]::Matches($text, [regex]::Escape($OldLabel))).Count
+            if ($hits -ne 1) { throw "$lang : expected one 'Logitech G29' text, found $hits." }
+            $patched = $Latin1.GetBytes($text.Replace($OldLabel, $replacement))
+            Write-ZipCopy $backupTable $gameTable $StringEntry $patched
+            Write-Host "  $lang patched"
+        } catch {
+            if ($strict) { throw }
+            Write-Warning "$lang skipped: $($_.Exception.Message)"
         }
-        $text = $Latin1.GetString((Read-ZipEntry $backupTable $StringEntry))
-        $hits = ([regex]::Matches($text, [regex]::Escape($OldLabel))).Count
-        if ($hits -ne 1) { throw "$lang : expected one 'Logitech G29' text, found $hits." }
-        $patched = $Latin1.GetBytes($text.Replace($OldLabel, $replacement))
-        Write-ZipCopy $backupTable $gameTable $StringEntry $patched
-        Write-Host "  $lang patched"
     }
 }
 
