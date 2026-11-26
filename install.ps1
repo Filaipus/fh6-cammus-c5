@@ -18,8 +18,8 @@
     FH6 folder. Default: $env:FH6_DIR, else found through Steam or the Game Pass package
     (see fh6-path.ps1).
 .PARAMETER BackupDir
-    Folder for the untouched copies. Default: $env:FH6_BACKUP_DIR, else %USERPROFILE%\fh6-backup
-    (Game Pass: %USERPROFILE%\fh6-backup\gamepass-<game version>).
+    Folder for the untouched copies. Default: $env:FH6_BACKUP_DIR, else a folder per game build
+    in %USERPROFILE%\fh6-backup (steam-<buildid>, gamepass-<version>; see fh6-path.ps1).
 .PARAMETER Label
     Name FH6 shows for the profile, at most 12 bytes (UTF-8). Default: CammusC5CP5.
 .PARAMETER Languages
@@ -46,6 +46,7 @@ Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 . "$PSScriptRoot\fh6-path.ps1"
 if (-not $GameDir) { $GameDir = Find-Fh6Dir }
 if (-not $BackupDir) { $BackupDir = Get-Fh6BackupDir $GameDir }
+$perBuildBackup = -not $env:FH6_BACKUP_DIR -and $BackupDir -ne $Fh6BackupRoot -and $BackupDir -eq (Get-Fh6BackupDir $GameDir)
 
 # --- constants -------------------------------------------------------------------------------
 $SlotEntry = 'DefaultRawGameControllerMappingProfileLogitechG29.xml'
@@ -103,6 +104,15 @@ function Write-ZipCopy([string]$Source, [string]$Destination, [string]$ReplaceNa
 function Confirm-Backup([string]$GameFile, [string]$BackupFile, [scriptblock]$IsOriginal) {
     if (Test-Path -LiteralPath $BackupFile) { return }
     if (-not (& $IsOriginal $GameFile)) {
+        # Installs from before the per-build folders kept their backups in fh6-backup itself;
+        # a still-patched game is restored from those, as before.
+        $legacy = $Fh6BackupRoot + $BackupFile.Substring($BackupDir.Length)
+        if ($perBuildBackup -and (Test-Path -LiteralPath $legacy) -and (& $IsOriginal $legacy)) {
+            New-Item -ItemType Directory -Force -Path (Split-Path $BackupFile) | Out-Null
+            Copy-Item -LiteralPath $legacy -Destination $BackupFile
+            Write-Host "  took over the earlier backup $legacy"
+            return
+        }
         throw "$GameFile is not the original file. Restore the game files first (Steam: Properties > Installed Files > Verify integrity of game files; Xbox app: Manage > Files > Verify and repair), then run again."
     }
     New-Item -ItemType Directory -Force -Path (Split-Path $BackupFile) | Out-Null
@@ -188,12 +198,11 @@ Write-Host ''
 Write-Host 'Done. In FH6: Settings > Advanced Controls > Invert Force Feedback = On;'
 Write-Host "Controls > Wheel > Layout = $Label; for telemetry: Settings > HUD and Gameplay > Data Out = On, 127.0.0.1, port 20779."
 Write-Host ''
-if (Get-Fh6PackageVersion $GameDir) {
-    Write-Host 'Run this script again after every FH6 update (the Xbox app installs them in the background)'
-    Write-Host 'and after "Verify and repair": both restore the game files and remove the profile and the'
-    Write-Host 'label (the DLL stays). Backups are kept per game version; nothing needs deleting first.'
+$verify = if (Get-Fh6PackageVersion $GameDir) { 'the Xbox app''s "Verify and repair"' } else { 'Steam''s "Verify integrity of game files"' }
+Write-Host "Run this script again after every FH6 update and after ${verify}:"
+Write-Host 'both restore the game files and remove the profile and the label (the DLL stays).'
+if ($perBuildBackup) {
+    Write-Host 'Backups are kept per game build, so nothing needs deleting after an update.'
 } else {
-    Write-Host 'Run this script again after every FH6 update and after Steam "Verify integrity of game files":'
-    Write-Host 'both restore the game files and remove the profile and the label (the DLL stays).'
     Write-Host "After an FH6 update, first delete the old copies in $BackupDir (they belong to the previous version)."
 }

@@ -18,8 +18,7 @@ Cammus app itself keeps running for the rim's display and LEDs.
 
 > **After every FH6 update, and after Steam's "Verify integrity of game files" (Xbox app:
 > "Verify and repair"): run `install.cmd` again.** Both restore the game's files, which
-> removes the profile and its label; the DLL stays. On Steam, after an **update**, delete the
-> old backups first (see
+> removes the profile and its label; the DLL stays (see
 > [After an update](#after-an-fh6-update-or-verify-integrity-of-game-files)).
 
 ## Hardware
@@ -60,8 +59,8 @@ Then two things are set by hand: the in-game settings and the Cammus app (below)
    through Windows' entry for the Game Pass package. To choose it yourself, run in a terminal
    `install.cmd -GameDir "D:\SteamLibrary\steamapps\common\ForzaHorizon6"`, or set the
    environment variable `FH6_DIR`. Untouched copies of the changed game files go to
-   `%USERPROFILE%\fh6-backup` (Game Pass: a `gamepass-<version>` subfolder; `-BackupDir` or
-   `FH6_BACKUP_DIR` to change); the script only
+   a folder per game build in `%USERPROFILE%\fh6-backup` (`steam-<buildid>` or
+   `gamepass-<version>`; `-BackupDir` or `FH6_BACKUP_DIR` to change); the script only
    backs up files that are still original and refuses otherwise.
    Other options: `-Label` (at most 12 bytes), `-Languages` (string tables for the label,
    default `EN, DE`), `-SkipDll`, `-SkipProfile`, `-SkipLabel`. `install.cmd` runs
@@ -136,12 +135,11 @@ game file and stays.
 
 - **After "Verify integrity of game files"** (Xbox app: **"Verify and repair"**): run
   `install.cmd` again.
-- **After an FH6 update on Steam:** delete the old copies in `%USERPROFILE%\fh6-backup` (or
-  your `-BackupDir`) first, since they belong to the previous version, then run
-  `install.cmd`; it backs up the new originals.
-- **After an FH6 update on Game Pass:** just run `install.cmd`. Backups are kept per game
-  version, so it backs up the new originals by itself. The Xbox app installs updates in the
-  background, so if the wheel layout is back to "Logitech G29", an update has run.
+- **After an FH6 update:** run `install.cmd` again. Backups are kept per game build, so it
+  backs up the new originals by itself; folders of old builds in `%USERPROFILE%\fh6-backup`
+  can be deleted. On Game Pass the Xbox app installs updates in the background: if the wheel
+  layout is back to "Logitech G29", an update has run. With your own `-BackupDir` or
+  `FH6_BACKUP_DIR`, or if the build cannot be read, delete the old copies there first.
 
 If the update changed a file in a way the script does not expect, it stops with a message
 before changing that file.
@@ -171,8 +169,8 @@ Differences from Steam:
   described in [docs/how-it-works.md](docs/how-it-works.md).
 - Restore the game files with Xbox app → Forza Horizon 6 → **Manage → Files → Verify and
   repair**.
-- Updates install in the background; run `install.cmd` after each one. Old backups need no
-  deleting (see [After an update](#after-an-fh6-update-or-verify-integrity-of-game-files)).
+- Updates install in the background; run `install.cmd` after each one (see
+  [After an update](#after-an-fh6-update-or-verify-integrity-of-game-files)).
 - Only downloaded language packs have string tables; the others are empty placeholder
   files, which the label step skips with a warning. For a language other than English, pass
   it, e.g. `install.cmd -Languages EN, PT`.

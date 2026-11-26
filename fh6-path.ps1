@@ -20,14 +20,30 @@ function Get-Fh6PackageVersion([string]$GameDir) {
     if ($m.Success) { $m.Groups[1].Value } else { $null }
 }
 
-# Default backup folder: $env:FH6_BACKUP_DIR, else %USERPROFILE%\fh6-backup. The Xbox app
-# updates FH6 in the background, so Game Pass backups go to a subfolder per game version:
-# after an update the next install run backs up the new originals by itself.
+# Steam build id from FH6's app manifest next to the library's common folder; $null if the
+# game folder is not in a Steam library.
+function Get-Fh6SteamBuild([string]$GameDir) {
+    if (-not $GameDir) { return $null }
+    $steamapps = Split-Path (Split-Path $GameDir)
+    if (-not $steamapps) { return $null }
+    $acf = Join-Path $steamapps "appmanifest_$Fh6AppId.acf"
+    if (-not (Test-Path -LiteralPath $acf)) { return $null }
+    $m = [regex]::Match((Get-Content -LiteralPath $acf -Raw), '"buildid"\s+"(\d+)"')
+    if ($m.Success) { $m.Groups[1].Value } else { $null }
+}
+
+$Fh6BackupRoot = "$env:USERPROFILE\fh6-backup"
+
+# Default backup folder: $env:FH6_BACKUP_DIR, else a subfolder of %USERPROFILE%\fh6-backup per
+# game build (gamepass-<version>, steam-<buildid>), so after an update the next install run
+# backs up the new originals by itself. Build unknown: %USERPROFILE%\fh6-backup itself.
 function Get-Fh6BackupDir([string]$GameDir) {
     if ($env:FH6_BACKUP_DIR) { return $env:FH6_BACKUP_DIR }
-    $dir = "$env:USERPROFILE\fh6-backup"
     $version = Get-Fh6PackageVersion $GameDir
-    if ($version) { "$dir\gamepass-$version" } else { $dir }
+    if ($version) { return "$Fh6BackupRoot\gamepass-$version" }
+    $build = Get-Fh6SteamBuild $GameDir
+    if ($build) { return "$Fh6BackupRoot\steam-$build" }
+    $Fh6BackupRoot
 }
 
 function Find-Fh6Dir {

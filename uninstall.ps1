@@ -19,7 +19,13 @@ param(
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\fh6-path.ps1"
 if (-not $GameDir) { $GameDir = Find-Fh6Dir }
-if (-not $BackupDir) { $BackupDir = Get-Fh6BackupDir $GameDir }
+if (-not $BackupDir) {
+    $BackupDir = Get-Fh6BackupDir $GameDir
+    # Installs from before the per-build folders kept their backups in fh6-backup itself.
+    if (-not (Test-Path -LiteralPath $BackupDir) -and (Test-Path -LiteralPath "$Fh6BackupRoot\inputmappingprofiles.zip")) {
+        $BackupDir = $Fh6BackupRoot
+    }
+}
 Write-Host "Game folder:   $GameDir"
 Write-Host "Backup folder: $BackupDir"
 if (Get-Process forzahorizon6 -ErrorAction SilentlyContinue) { throw 'Forza Horizon 6 is running. Close it first.' }
